@@ -1,0 +1,79 @@
+
+****************************************************************
+		Generate the signing key:
+# Generate private key
+openssl genrsa -out sbv2_private_dev.pem 3072
+
+# Extract public key
+openssl rsa -in sbv2_private_dev.pem -pubout > sbv2_public_dev.pem
+
+****************************************************************
+
+idf.py create-project project_name
+
+idf.py set-target esp32
+
+idf.py menuconfig
+
+		menuconfig:
+		
+Component Config > ESP32- Specific -> Minimum Supported ESP32 Revision to v3.0 
+
+Security Features > RSA, V2, sign apps,
+
+save menuconfig
+
+idf.py build
+
+esptool.py --chip esp32 --port=COMx --baud=460800 --before=default_reset --after=no_reset write_flash --force --flash_mode dio --flash_freq 40m --flash_size 2MB 0x1000 build/bootloader/bootloader.bin
+
+idf.py -p COMx flash monitor
+
+****************************************************************
+# Sign main.bin using your private key
+espsecure.py sign_data --version 2 --keyfile sbv2_private_dev.pem --output main.bin.signed main.bin
+espsecure.py sign_data --version 2 --keyfile sbv2_private_dev.pem --output main.bin.signed main.bin
+
+espsecure.py sign_data --version 2 --keyfile K1.pem --output APP-SIG.bin.signed APP.bin
+
+
+# Verify the signed image
+espsecure.py verify_signature --version 2 --keyfile sbv2_private_dev.pem main.bin.signed
+
+
+esptool.py --chip esp32 --port=COM9 --baud=460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 40m --flash_size 2MB 0x10000 partition-table.bin 0x14000 main.bin.signed
+
+****************************************************************
+Arduino ESP32 v3.1.0 RC3
+Based directly on ESP-IDF v5.3.1+
+git clone https://github.com/espressif/arduino-esp32.git
+cd arduino-esp32
+git checkout e9b3f26
+
+Project build complete. To flash, run:
+ idf.py flash
+or
+ idf.py -p PORT flash
+or
+ python -m esptool --chip esp32 -b 460800 --before default_reset --after no_reset write_flash --flash_mode dio --flash_size keep --flash_freq 40m 0x10000 build\partition_table\partition-table.bin 0x20000 build\AppV2.bin
+or from the "D:\esp_V2_sec_Boot\secV2_app\AppV2\build" directory
+ python -m esptool --chip esp32 -b 460800 --before default_reset --after no_reset write_flash "@flash_args"
+
+****************************************************************
+
+esptool.py image_info app.bin
+
+esptool.py v4.8.1
+File size: 262592 (bytes)
+Detected image type: ESP32
+Image version: 1
+Entry point: 400829ac
+5 segments
+
+Segment 1: len 0x0c8a4 load 0x3f400020 file_offs 0x00000018 [DROM]
+Segment 2: len 0x0374c load 0x3ffbdb60 file_offs 0x0000c8c4 [BYTE_ACCESSIBLE,DRAM]
+Segment 3: len 0x21610 load 0x400d0020 file_offs 0x00010018 [IROM]
+Segment 4: len 0x00954 load 0x3ffc12ac file_offs 0x00031630 [BYTE_ACCESSIBLE,DRAM]
+Segment 5: len 0x0e1fc load 0x40080000 file_offs 0x00031f8c [IRAM]
+Checksum: 27 (valid)
+Validation Hash: 3fb3ca836893525326c3c087e162192704dabf4b0d67fd570718abc7beae47a6 (valid)
